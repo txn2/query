@@ -3,7 +3,7 @@ build:
   # Path to main.go file.
   # Default is `main.go`
   main: ./cmd/query.go
-  binary: tm
+  binary: query
 
   env:
   - GO111MODULE=on

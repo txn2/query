@@ -70,3 +70,15 @@ curl -X GET \
   http://localhost:8080/get/xorg/all_los_angeles_parking_citations \
   -H 'Authorization: Bearer $TOKEN'
 ```
+
+## Release Packaging
+
+Build test release:
+```bash
+goreleaser --skip-publish --rm-dist --skip-validate
+```
+
+Build and release:
+```bash
+GITHUB_TOKEN=$GITHUB_TOKEN goreleaser --rm
+```
