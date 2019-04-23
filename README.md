@@ -3,7 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/txn2/query)](https://goreportcard.com/report/github.com/txn2/query)
 [![GoDoc](https://godoc.org/github.com/txn2/query?status.svg)](https://godoc.org/github.com/txn2/query)
 [![Docker Container Image Size](https://shields.beevelop.com/docker/image/image-size/txn2/query/latest.svg)](https://hub.docker.com/r/txn2/query/)
-[![Docker Container Layers](https://shields.beevelop.com/docker/image/layers/txn2/rxtx/latest.svg)](https://hub.docker.com/r/txn2/irsync/)
+[![Docker Container Layers](https://shields.beevelop.com/docker/image/layers/txn2/rxtx/latest.svg)](https://hub.docker.com/r/txn2/query/)
 
 WIP: query TXN2 data by account, model and index pattern. Save queries and execute saved queries.
 
