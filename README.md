@@ -100,7 +100,7 @@ curl -X POST http://localhost:8085/model/test \
 }'
 ```
 
-In Elastis search there is now a template `_template/test-data-some_metrics` for the test account describing [txn2/rxtx]/[txn2/rtbeat] inbound data matching index pattern `test-data-some_metrics-*`. Send some sample data to Elastic search through [txn2/rxtx] and wait for the batch interval (specified in the docker-compose) to complete:
+Within Elasticsearch there is now a template `_template/test-data-some_metrics` for the account **test** describing [txn2/rxtx]/[txn2/rtbeat] inbound data matching index pattern `test-data-some_metrics-*`. Send some sample data to Elasticsearch through [txn2/rxtx] and wait for the batch interval (specified in the docker-compose) to complete:
 
 ```bash
 curl -X POST \
