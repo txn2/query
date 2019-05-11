@@ -118,20 +118,25 @@ The fields in the data sent to [txn2/rxtx] should match the fields described in 
 
 ## Example Queries
 
+Run **query** from source. Configure it to use the services running from docker-compose above.
+
+```bash
+go run ./cmd/query.go --esServer=http://localhost:9200 --tokenKey="somegoodkey"
+```
+
 Run / Test a [Query]:
 ```bash
 curl -X POST \
   http://localhost:8080/run/test \
-  -H 'Authorization: Bearer $TOKEN' \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "machine_name": "all_los_angeles_parking_citations",
-    "display_name": "All Los Angeles Parking Citations",
-    "description_brief": "Gets all Los Angeles parking citation records available.",
-    "description": "This is a dataset hosted by the city of Los Angeles. The organization has an open data platform found [here](https://data.lacity.org/)",
-    "query_class": "table",
-    "model": "los_angeles_parking_citations",
-    "idx_pattern": "-testset",
+    "machine_name": "count_some_metrics",
+    "display_name": "Get all records from the some_metrics index.",
+    "description": "Return all matches",
+    "model": "some_metrics",
+    "idx_pattern": "-ts-*",
     "query": {
+      "size": 0,
 	  "query": {
 	    "match_all": {}
 	  }
@@ -139,20 +144,19 @@ curl -X POST \
 }'
 ```
 
-Upsert a [Query]:
+Upsert a [Query] (must have admin access to account):
 ```bash
 curl -X POST \
   http://localhost:8080/upsert/test \
-  -H 'Authorization: Bearer $TOKEN' \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "machine_name": "all_los_angeles_parking_citations",
-    "display_name": "All Los Angeles Parking Citations",
-    "description_brief": "Gets all Los Angeles parking citation records available",
-    "description": "This is a dataset hosted by the city of Los Angeles. The organization has an open data platform found [here](https://data.lacity.org/)",
-    "query_class": "table",
-    "model": "los_angeles_parking_citations",
-    "idx_pattern": "-testset",
+    "machine_name": "count_some_metrics",
+    "display_name": "Get all records from the some_metrics index.",
+    "description": "Return all matches",
+    "model": "some_metrics",
+    "idx_pattern": "-ts-*",
     "query": {
+      "size": 0,
 	  "query": {
 	    "match_all": {}
 	  }
@@ -164,7 +168,7 @@ Search for queries:
 ```bash
 curl -X POST \
   http://localhost:8080/search/test \
-  -H 'Authorization: Bearer $TOKEN' \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
   "size": 10,
   "query": {
@@ -176,8 +180,15 @@ curl -X POST \
 Get a [Query]:
 ```bash
 curl -X GET \
-  http://localhost:8080/get/xorg/all_los_angeles_parking_citations \
-  -H 'Authorization: Bearer $TOKEN'
+  http://localhost:8080/get/test/count_some_metrics \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Execute a [Query]:
+```bash
+curl -X GET \
+  http://localhost:8080/exec/test/count_some_metrics \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 [Token]: https://github.com/txn2/token
