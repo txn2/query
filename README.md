@@ -118,15 +118,15 @@ The fields in the data sent to [txn2/rxtx] should match the fields described in 
 
 ## Example Queries
 
-Upsert a [Query]:
+Run / Test a [Query]:
 ```bash
 curl -X POST \
-  http://localhost:8080/upsert/test \
+  http://localhost:8080/run/test \
   -H 'Authorization: Bearer $TOKEN' \
   -d '{
     "machine_name": "all_los_angeles_parking_citations",
     "display_name": "All Los Angeles Parking Citations",
-    "description_brief": "Gets all Los Angeles parking citation records available",
+    "description_brief": "Gets all Los Angeles parking citation records available.",
     "description": "This is a dataset hosted by the city of Los Angeles. The organization has an open data platform found [here](https://data.lacity.org/)",
     "query_class": "table",
     "model": "los_angeles_parking_citations",
@@ -139,15 +139,15 @@ curl -X POST \
 }'
 ```
 
-Run / Test a [Query]:
+Upsert a [Query]:
 ```bash
 curl -X POST \
-  http://localhost:8080/run/test \
+  http://localhost:8080/upsert/test \
   -H 'Authorization: Bearer $TOKEN' \
   -d '{
     "machine_name": "all_los_angeles_parking_citations",
     "display_name": "All Los Angeles Parking Citations",
-    "description_brief": "Gets all Los Angeles parking citation records available.",
+    "description_brief": "Gets all Los Angeles parking citation records available",
     "description": "This is a dataset hosted by the city of Los Angeles. The organization has an open data platform found [here](https://data.lacity.org/)",
     "query_class": "table",
     "model": "los_angeles_parking_citations",
@@ -173,7 +173,7 @@ curl -X POST \
 }'
 ```
 
-Get a query:
+Get a [Query]:
 ```bash
 curl -X GET \
   http://localhost:8080/get/xorg/all_los_angeles_parking_citations \
