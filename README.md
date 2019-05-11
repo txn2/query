@@ -5,11 +5,31 @@
 [![Docker Container Image Size](https://shields.beevelop.com/docker/image/image-size/txn2/query/latest.svg)](https://hub.docker.com/r/txn2/query/)
 [![Docker Container Layers](https://shields.beevelop.com/docker/image/layers/txn2/rxtx/latest.svg)](https://hub.docker.com/r/txn2/query/)
 
-WIP: query TXN2 data by account, model and index pattern. Save queries and execute saved queries.
+[Query] TXN2 data by [Account], [Model] and index pattern. Save a [Query] and execute a saved [Query].
+
+## Configuration
+
+Configuration is inherited from [txn2/micro](https://github.com/txn2/micro#configuration). The
+following configuration is specific to **query**:
+
+| Flag          | Environment Variable | Description                                                |
+|:--------------|:---------------------|:-----------------------------------------------------------|
+| -esServer     | ELASTIC_SERVER       | Elasticsearch Server (default "http://elasticsearch:9200") |
+
+## Routes
+
+| Method | Route Pattern                          | Description                                                    |
+|:-------|:---------------------------------------|:---------------------------------------------------------------|
+| POST   | [run/:account](#run-a-query)           | Run a quert to test it. This action does not upsert the query. |
+| GET    | [exec/:account/:id](#execute-a-query)  | Executes a saved (upserted) query.                             |
+| POST   | [upsert/:account](#upsert-a-query)     | Upsert (save) a query.                                         |
+| GET    | [get/:account/:id](#get-a-query)       | Get a saved query.                                             |
+| POST   | [search/:account](#search-for-queries) | Search for saved queries.                                      |
+
 
 ## Local Development
 
-The project includes a Docker Compose file with Elasticsearch, Kibana and Cerebro:
+The project includes a Docker Compose file with [Elasticsearch], [Logstash], [Kibana], [Cerebro], [txn2/rxtx], [txn2/rtbeat] and [txn2/tm]:
 ```bash
 docker-compose up
 ```
@@ -124,7 +144,7 @@ Run **query** from source. Configure it to use the services running from docker-
 go run ./cmd/query.go --esServer=http://localhost:9200 --tokenKey="somegoodkey"
 ```
 
-Run / Test a [Query]:
+### Run a [Query]:
 ```bash
 curl -X POST \
   http://localhost:8080/run/test \
@@ -144,7 +164,8 @@ curl -X POST \
 }'
 ```
 
-Upsert a [Query] (must have admin access to account):
+### Upsert a [Query]:
+(must have admin access to account)
 ```bash
 curl -X POST \
   http://localhost:8080/upsert/test \
@@ -164,7 +185,7 @@ curl -X POST \
 }'
 ```
 
-Search for queries:
+### Search for queries:
 ```bash
 curl -X POST \
   http://localhost:8080/search/test \
@@ -177,14 +198,14 @@ curl -X POST \
 }'
 ```
 
-Get a [Query]:
+### Get a [Query]:
 ```bash
 curl -X GET \
   http://localhost:8080/get/test/count_some_metrics \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Execute a [Query]:
+### Execute a [Query]:
 ```bash
 curl -X GET \
   http://localhost:8080/exec/test/count_some_metrics \
@@ -197,8 +218,13 @@ curl -X GET \
 [txn2/rtbeat]: https://github.com/txn2/tm
 [txn2/rxtx]: https://github.com/txn2/rxtx
 [User]: https://godoc.org/github.com/txn2/provision#User
+[Account]: https://godoc.org/github.com/txn2/provision#Account
 [Query]: https://godoc.org/github.com/txn2/query#Query
 [Model]: https://godoc.org/github.com/txn2/tm#Model
+[Elasticsearch]: https://www.elastic.co/products/elasticsearch
+[Kibana]: https://www.elastic.co/products/kibana
+[Cerebro]: https://github.com/lmenezes/cerebro
+[Logstash]: https://www.elastic.co/products/logstash
 
 ## Release Packaging
 
