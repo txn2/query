@@ -1,0 +1,20 @@
+rtbeat:
+  # HTTP server port
+  port: "8081"
+  # timeout
+  timeout: 5
+
+output.logstash:
+  enabled: true
+  # beats listener configured in logstash.conf
+  hosts: ["logstash:5044"]
+
+# internal metrics through a HTTP endpoint
+http.enabled: true
+http.port: 5066
+
+# used in the logstash pipeline to infer time-series
+# data without the use of a specific document id and
+# using -ts- in the index name.
+fields:
+  idx: ts

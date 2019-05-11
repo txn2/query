@@ -1,0 +1,154 @@
+version: "3"
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.5.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - transport.host=127.0.0.1
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - http.host=0.0.0.0
+      - http.port=9200
+      - "http.cors.allow-origin=http://localhost:1358"
+      - "http.cors.enabled=true"
+      - "http.cors.allow-headers=X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization"
+      - "http.cors.allow-credentials=true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - esnet
+
+  # Provision creates account, user and asset documents in Elasticsearch
+  # see: https://github.com/txn2/provision
+  provision:
+    image: txn2/provision:v0.1.4
+    container_name: provision
+    environment:
+      - SYSTEM_PREFIX=system_
+      - ELASTIC_SERVER=http://elasticsearch:9200
+      - DEBUG=false
+      - IP=0.0.0.0
+      - PORT=8070
+      - TOKEN_EXP=1440
+      - TOKEN_KEY=somegoodkey
+      - AGENT="DockerCompose"
+      - SERVICE_ENV="local"
+    ports:
+      - "8070:8070"
+    networks:
+      - esnet
+    depends_on:
+      - elasticsearch
+
+  # see ./dev_config/lostash.conf for the current logstash pipline
+  # configuration. Logstash is configured with a beat listener on port 5044
+  # rtBeat will connect and send it's batches of messages through port 5044
+  # Logstash will parse messages from rtBeat and send them to an appropriate
+  # index.
+  logstash:
+    image: docker.elastic.co/logstash/logstash-oss:6.5.4
+    container_name: logstash
+    environment:
+      - ES_VERSION=6.5.2
+    volumes:
+      - ./dev_cfg/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    networks:
+      - esnet
+    depends_on:
+      - elasticsearch
+
+  # rtbeat accepts batches of JSON messages from rxtx
+  # see https://github.com/txn2/rtbeat
+  rtbeat:
+    image: txn2/rtbeat:1.1.1
+    container_name: rtbeat
+    command: ["-c","/cfg/rtbeat.yml","-e","-d", "\"*\""]
+    volumes:
+      - ./dev_cfg:/cfg
+    networks:
+      - esnet
+    depends_on:
+      - logstash
+
+  # rxtx receives JSON post messages. Every interval seconds rxtx
+  # sends a batch of received messages to rtbeat.
+  # see https://github.com/txn2/rxtx
+  rxtx:
+    image: txn2/rxtx:2.0.1
+    container_name: rxtx
+    command: ["-ingest","http://rtbeat:8081/in","-interval","5","-port","8090"]
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./dev_cfg:/cfg
+    networks:
+      - esnet
+    depends_on:
+      - rtbeat
+
+  # tm is used for defining the strucutre and Elasticsearch indexing rules for Messages
+  # sent to Elasticsearch from rxtx through rtBeat with the key rxtxMsg. tm Models define
+  # the properties of the rxtx payload.
+  # see https://github.com/txn2/tm
+  tm:
+    image: txn2/tm:v0.1.1
+    container_name: tm
+    restart: unless-stopped
+    environment:
+      - DEBUG=false
+      - IP=0.0.0.0
+      - PORT=8080
+      - TOKEN_EXP=1440
+      - TOKEN_KEY=somegoodkey
+      - AGENT="DockerCompose"
+      - SERVICE_ENV="local"
+    ports:
+      - "8085:8080"
+    networks:
+      - esnet
+    depends_on:
+      - elasticsearch
+
+  # use Kibana to visualize and debug data
+  # http://localhost:5601
+  kibana:
+    image: docker.elastic.co/kibana/kibana-oss:6.5.2
+    container_name: kibana
+    environment:
+      SERVER_NAME: kibana-server
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    networks:
+      - esnet
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  # use Cerebro to visualize and debug Elasticsearch
+  # http://localhost:9900/#/overview?host=http:%2F%2Felasticsearch:9200
+  cerebro:
+    image: yannart/cerebro:0.8.1
+    container_name: cerebro
+    networks:
+      - esnet
+    ports:
+      - "9900:9000"
+    depends_on:
+      - elasticsearch
+
+volumes:
+  esdata:
+    driver: local
+
+networks:
+  esnet:
+    driver: bridge

@@ -1,3 +1,14 @@
+// Copyright 2019 txn2
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package query
 
 import (
@@ -9,7 +20,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// ModelSearchResults
+// SearchResults
 type SearchResults struct {
 	es.SearchResults
 	Hits struct {
@@ -19,13 +30,13 @@ type SearchResults struct {
 	} `json:"hits"`
 }
 
-// AccountSearchResultsAck
+// SearchResultsAck
 type SearchResultsAck struct {
 	ack.Ack
 	Payload SearchResults `json:"payload"`
 }
 
-// SearchModels
+// SearchQueries
 func (a *Api) SearchQueries(account string, searchObj *es.Obj) (int, SearchResults, error) {
 	queryResults := &SearchResults{}
 
@@ -49,7 +60,7 @@ func (a *Api) SearchQueryHandler(c *gin.Context) {
 		return
 	}
 
-	// SearchModelsHandler must be security screened in
+	// SearchQueryHandler must be security screened in
 	// upstream middleware to protect account access.
 	account := c.Param("account")
 

@@ -7,39 +7,121 @@
 
 WIP: query TXN2 data by account, model and index pattern. Save queries and execute saved queries.
 
+## Local Development
 
-## Examples
-
-Start server:
+The project includes a Docker Compose file with Elasticsearch, Kibana and Cerebro:
 ```bash
-go run ./cmd/query.go --tokenKey=$TOKEN_KEY --esServer=http://elasticsearch:9200
+docker-compose up
 ```
 
-Run / Test a query:
+Add test account with [txn2/provision]:
 ```bash
 curl -X POST \
-  http://localhost:8080/run/xorg \
-  -H 'Authorization: Bearer $TOKEN' \
+  http://localhost:8070/account \
+  -H 'Content-Type: application/json' \
   -d '{
-    "machine_name": "all_los_angeles_parking_citations",
-    "display_name": "All Los Angeles Parking Citations",
-    "description_brief": "Gets all Los Angeles parking citation records available.",
-    "description": "This is a dataset hosted by the city of Los Angeles. The organization has an open data platform found [here](https://data.lacity.org/)",
-    "query_class": "table",
-    "model": "los_angeles_parking_citations",
-    "idx_pattern": "-testset",
-    "query": {
-	  "query": {
-	    "match_all": {}
-	  }
-	}
+    "id": "test",
+    "description": "This is a test account",
+    "display_name": "Test Organization",
+    "active": true,
+    "access_keys": [
+        {
+            "name": "test",
+            "key": "PDWgYr3bQGNoLptBRDkLTGQcRmCMqLGRFpXoXJ8xMPsMLMg3LHvWpJgDu2v3LYBA",
+            "description": "Generic access key 2",
+            "active": true
+        }
+    ],
+    "modules": [
+        "wx",
+        "data_science"
+    ]
 }'
 ```
 
-Upsert a query:
+Add an admin [User] with with [txn2/provision] given access to the test account:
+
 ```bash
 curl -X POST \
-  http://localhost:8080/upsert/xorg \
+  http://localhost:8070/user \
+  -H 'Content-Type: application/json' \
+  -d '{
+	"id": "test",
+	"description": "Test User admin",
+	"display_name": "Test User",
+	"active": true,
+	"sysop": false,
+	"password": "eWidL7UtiWJABHgn8WA",
+	"sections_all": false,
+	"sections": ["api", "config", "data"],
+	"accounts": ["test"],
+	"admin_accounts": ["test"]
+}'
+```
+
+Get a user [Token] from [txn2/provision] with the [User]'s id and password:
+
+```bash
+TOKEN=$(curl -s -X POST \
+          http://localhost:8070/authUser?raw=true \
+          -d '{
+        	"id": "test_user",
+        	"password": "eWidL7UtiWJABHgn8WA"
+        }') && echo $TOKEN
+```
+
+Insert a sample [Model] into the **test** account using [txn2/tm] running on port **8085**:
+
+```bash
+curl -X POST http://localhost:8085/model/test \
+ -H "Authorization: Bearer $TOKEN" \
+ -H 'Content-Type: application/json' \
+ -d '{
+  "machine_name": "some_metrics",
+  "display_name": "Some Metrics",
+  "description": "A sample model describing some metrics sent through rxtx",
+  "fields": [
+    {
+      "machine_name": "device_id",
+      "display_name": "Device ID",
+      "data_type": "keyword"
+    },
+    {
+      "machine_name": "random_number",
+      "display_name": "Random Number",
+      "data_type": "integer"
+    },
+    {
+      "machine_name": "another_number",
+      "display_name": "Another Number",
+      "data_type": "integer"
+    }
+  ]
+}'
+```
+
+In Elastis search there is now a template `_template/test-data-some_metrics` for the test account describing [txn2/rxtx]/[txn2/rtbeat] inbound data matching index pattern `test-data-some_metrics-*`. Send some sample data to Elastic search through [txn2/rxtx] and wait for the batch interval (specified in the docker-compose) to complete:
+
+```bash
+curl -X POST \
+  http://localhost:8090/rx/test/some_metrics/sample-data \
+  -H 'Content-Type: application/json' \
+  -d "{
+  \"device_id\": \"12345\",
+  \"random_number\": \"${RANDOM}\",
+  \"another_number\": 12345
+}"
+```
+
+The fields in the data sent to [txn2/rxtx] should match the fields described in the [txn2/tm] [Model]. Although the value for "random_number" is represented here as a string, the template mapping added with the [Model] instructs Elasticsearch to index it as an integer.
+
+
+## Example Queries
+
+Upsert a [Query]:
+```bash
+curl -X POST \
+  http://localhost:8080/upsert/test \
   -H 'Authorization: Bearer $TOKEN' \
   -d '{
     "machine_name": "all_los_angeles_parking_citations",
@@ -57,10 +139,31 @@ curl -X POST \
 }'
 ```
 
+Run / Test a [Query]:
+```bash
+curl -X POST \
+  http://localhost:8080/run/test \
+  -H 'Authorization: Bearer $TOKEN' \
+  -d '{
+    "machine_name": "all_los_angeles_parking_citations",
+    "display_name": "All Los Angeles Parking Citations",
+    "description_brief": "Gets all Los Angeles parking citation records available.",
+    "description": "This is a dataset hosted by the city of Los Angeles. The organization has an open data platform found [here](https://data.lacity.org/)",
+    "query_class": "table",
+    "model": "los_angeles_parking_citations",
+    "idx_pattern": "-testset",
+    "query": {
+	  "query": {
+	    "match_all": {}
+	  }
+	}
+}'
+```
+
 Search for queries:
 ```bash
 curl -X POST \
-  http://localhost:8080/search/xorg \
+  http://localhost:8080/search/test \
   -H 'Authorization: Bearer $TOKEN' \
   -d '{
   "size": 10,
@@ -76,6 +179,15 @@ curl -X GET \
   http://localhost:8080/get/xorg/all_los_angeles_parking_citations \
   -H 'Authorization: Bearer $TOKEN'
 ```
+
+[Token]: https://github.com/txn2/token
+[txn2/provision]: https://github.com/txn2/provision
+[txn2/tm]: https://github.com/txn2/tm
+[txn2/rtbeat]: https://github.com/txn2/tm
+[txn2/rxtx]: https://github.com/txn2/rxtx
+[User]: https://godoc.org/github.com/txn2/provision#User
+[Query]: https://godoc.org/github.com/txn2/query#Query
+[Model]: https://godoc.org/github.com/txn2/tm#Model
 
 ## Release Packaging
 
