@@ -22,8 +22,8 @@ following configuration is specific to **query**:
 
 | Method | Route Pattern                          | Description                                                    |
 |:-------|:---------------------------------------|:---------------------------------------------------------------|
-| POST   | [run/:account](#run-a-query)           | Run a quert to test it. This action does not upsert the query. |
-| GET    | [exec/:account/:id](#execute-a-query)  | Executes a saved (upserted) query.                             |
+| POST   | [run/:account](#run-a-query)           | Run a query to test it. This action does not save the query.   |
+| GET    | [exec/:account/:id](#execute-a-query)  | Executes a saved query.                                        |
 | POST   | [upsert/:account](#upsert-a-query)     | Upsert (save) a query.                                         |
 | GET    | [get/:account/:id](#get-a-query)       | Get a saved query.                                             |
 | POST   | [search/:account](#search-for-queries) | Search for saved queries.                                      |
