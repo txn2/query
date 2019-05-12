@@ -40,8 +40,8 @@ services:
       - PORT=8070
       - TOKEN_EXP=1440
       - TOKEN_KEY=somegoodkey
-      - AGENT="DockerCompose"
-      - SERVICE_ENV="local"
+      - AGENT=DockerCompose
+      - SERVICE_ENV=local
     ports:
       - "8070:8070"
     networks:

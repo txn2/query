@@ -7,7 +7,7 @@
 
 [Query] TXN2 data by [Account], [Model] and index pattern. Save a [Query] and execute a saved [Query].
 
-![query data flow](./assets/flow.png)
+![query data flow](https://github.com/txn2/query/blob/master/assets/flow.png?raw=true)
 
 ## Configuration
 
@@ -31,7 +31,7 @@ following configuration is specific to **query**:
 
 ## Local Development
 
-The project includes a Docker Compose file with [Elasticsearch], [Logstash], [Kibana], [Cerebro], [txn2/rxtx], [txn2/rtbeat] and [txn2/tm]:
+The project includes a [docker-compose.yml] file with [Elasticsearch], [Logstash], [Kibana], [Cerebro], [txn2/rxtx], [txn2/rtbeat], [txn2/provision] and [txn2/tm]:
 ```bash
 docker-compose up
 ```
@@ -87,7 +87,7 @@ Get a user [Token] from [txn2/provision] with the [User]'s id and password:
 TOKEN=$(curl -s -X POST \
           http://localhost:8070/authUser?raw=true \
           -d '{
-        	"id": "test_user",
+        	"id": "test",
         	"password": "eWidL7UtiWJABHgn8WA"
         }') && echo $TOKEN
 ```
@@ -227,6 +227,7 @@ curl -X GET \
 [Kibana]: https://www.elastic.co/products/kibana
 [Cerebro]: https://github.com/lmenezes/cerebro
 [Logstash]: https://www.elastic.co/products/logstash
+[docker-compose.yml]: docker-compose.yml
 
 ## Release Packaging
 
