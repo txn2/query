@@ -7,6 +7,8 @@
 
 [Query] TXN2 data by [Account], [Model] and index pattern. Save a [Query] and execute a saved [Query].
 
+![query data flow](./assets/flow.png)
+
 ## Configuration
 
 Configuration is inherited from [txn2/micro](https://github.com/txn2/micro#configuration). The
