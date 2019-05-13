@@ -39,7 +39,7 @@ services:
       - IP=0.0.0.0
       - PORT=8070
       - TOKEN_EXP=1440
-      - TOKEN_KEY=somegoodkey
+      - TOKEN_KEY=somesharedkey
       - AGENT=DockerCompose
       - SERVICE_ENV=local
     ports:
@@ -108,7 +108,7 @@ services:
       - IP=0.0.0.0
       - PORT=8080
       - TOKEN_EXP=1440
-      - TOKEN_KEY=somegoodkey
+      - TOKEN_KEY=somesharedkey
       - AGENT="DockerCompose"
       - SERVICE_ENV="local"
     ports:

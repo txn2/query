@@ -143,7 +143,7 @@ The fields in the data sent to [txn2/rxtx] should match the fields described in 
 Run **query** from source. Configure it to use the services running from docker-compose above.
 
 ```bash
-go run ./cmd/query.go --esServer=http://localhost:9200 --tokenKey="somegoodkey"
+go run ./cmd/query.go --esServer=http://localhost:9200 --provisionServer=http://localhost:8070 --tokenKey="somesharedkey"
 ```
 
 ### Run a [Query]:
@@ -214,6 +214,13 @@ curl -X GET \
   -H "Authorization: Bearer $TOKEN"
 ```
 
+### Execute a [Query] with BasicAuth using an [Account] [AccessKey]:
+```bash
+curl -X GET \
+  http://localhost:8080/exec/test/count_some_metrics \
+  -H 'Authorization: Basic dGVzdDpQRFdnWXIzYlFHTm9McHRCUkRrTFRHUWNSbUNNcUxHUkZwWG9YSjh4TVBzTUxNZzNMSHZXcEpnRHUydjNMWUJB'
+```
+
 [Token]: https://github.com/txn2/token
 [txn2/provision]: https://github.com/txn2/provision
 [txn2/tm]: https://github.com/txn2/tm
@@ -228,6 +235,7 @@ curl -X GET \
 [Cerebro]: https://github.com/lmenezes/cerebro
 [Logstash]: https://www.elastic.co/products/logstash
 [docker-compose.yml]: docker-compose.yml
+[AccessKey]: https://godoc.org/github.com/txn2/provision#AccessKey
 
 ## Release Packaging
 
