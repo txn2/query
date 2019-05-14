@@ -13,6 +13,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -21,7 +22,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/json"
 	"github.com/patrickmn/go-cache"
 	"github.com/txn2/ack"
 	"github.com/txn2/micro"
@@ -83,7 +83,6 @@ func main() {
 					ak := ack.Gin(c)
 					ak.SetPayload("Unauthorized via cache.")
 					ak.GinErrorAbort(401, "E401", "UnauthorizedFailure")
-
 					return
 				}
 
@@ -124,16 +123,17 @@ func main() {
 			tokenHandler := provision.UserTokenHandler()
 			tokenHandler(c)
 
+			if c.IsAborted() {
+				return
+			}
+
 			// Check token
 			tokenCheck := provision.AccountAccessCheckHandler(checkAdmin)
 			tokenCheck(c)
 		}
 	}
 
-	// User token middleware
-	//server.Router.Use()
-
-	// run a query (one-off operation for running or testing queries"
+	// Run a query (one-off operation for running or testing queries
 	server.Router.POST("run/:account",
 		accessHandler(false),
 		qApi.RunQueryHandler,

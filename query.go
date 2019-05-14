@@ -14,9 +14,14 @@
 package query
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"text/template"
+	"time"
+
+	"github.com/Masterminds/sprig"
 
 	"github.com/gin-gonic/gin"
 	"github.com/txn2/ack"
@@ -57,6 +62,23 @@ func NewApi(cfg *Config) (*Api, error) {
 		})
 	}
 
+	// check for elasticsearch a few times before failing
+	// this reduces a reliance on restarts when a full system is
+	// spinning up
+	backOff := []int{10, 10, 15, 15, 30, 30, 45}
+	for _, boff := range backOff {
+		code, _, _ := a.Elastic.Get("")
+		a.Logger.Info("Attempting to contact Elasticsearch", zap.String("server", a.Elastic.ElasticServer))
+
+		if code == 200 {
+			a.Logger.Info("Connection to Elastic search successful.", zap.String("server", a.Elastic.ElasticServer))
+			break
+		}
+
+		a.Logger.Warn("Unable to contact Elasticsearch rolling back off.", zap.Int("wait_seconds", boff))
+		<-time.After(time.Duration(boff) * time.Second)
+	}
+
 	// send template mappings for query index
 	_, _, err := a.Elastic.SendEsMapping(GetQueryTemplateMapping())
 	if err != nil {
@@ -81,7 +103,7 @@ func (a *Api) RunQueryHandler(c *gin.Context) {
 		return
 	}
 
-	code, queryExecuteResult, err := a.ExecuteQuery(account, *query)
+	code, queryExecuteResult, err := a.ExecuteQuery(account, *query, c)
 	if err != nil {
 		a.Logger.Error("EsError", zap.Error(err))
 		ak.SetPayloadType("EsError")
@@ -101,8 +123,67 @@ func (a *Api) RunQueryHandler(c *gin.Context) {
 }
 
 // ExecuteQuery
-func (a *Api) ExecuteQuery(account string, query Query) (int, *es.Obj, error) {
+func (a *Api) ExecuteQuery(account string, query Query, c *gin.Context) (int, *es.Obj, error) {
 	queryResults := &es.Obj{}
+
+	// is there a template to process?
+	//
+	if query.QueryTemplate != "" {
+		// populate parameter map
+		params := make(map[string]interface{})
+		for _, param := range query.Parameters {
+			if qv, ok := c.GetQuery(param.MachineName); ok {
+				params[param.MachineName] = qv
+				continue
+			}
+			params[param.MachineName] = param.DefaultValue
+		}
+
+		// process template
+		a.Logger.Debug("Process query template.")
+		tmpl, err := template.New("query_template").Funcs(sprig.TxtFuncMap()).Parse(query.QueryTemplate)
+		if err != nil {
+			a.Logger.Error("Error processing query template.", zap.Error(err))
+			return 500, nil, err
+		}
+
+		var qb bytes.Buffer
+		err = tmpl.Execute(&qb, params)
+		if err != nil {
+			a.Logger.Error("Error executing query template.", zap.Error(err))
+			return 500, nil, err
+		}
+
+		query.QueryJson = qb.String()
+		a.Logger.Debug("Parsed template query", zap.String("query", query.QueryJson))
+
+		query.Query = &es.Obj{}
+
+		err = json.Unmarshal(qb.Bytes(), query.Query)
+		if err != nil {
+			a.Logger.Error("Error Marshaling query json into object.", zap.Error(err))
+			return 500, nil, err
+		}
+
+		// process index pattern as template
+		//
+		a.Logger.Debug("Process idx_pattern template.")
+		tmpl, err = template.New("idx_pattern").Funcs(sprig.TxtFuncMap()).Parse(query.IdxPattern)
+		if err != nil {
+			a.Logger.Error("Error processing idx_pattern template.", zap.Error(err))
+			return 500, nil, err
+		}
+
+		var ipb bytes.Buffer
+		err = tmpl.Execute(&ipb, params)
+		if err != nil {
+			a.Logger.Error("Error executing idx_pattern template.", zap.Error(err))
+			return 500, nil, err
+		}
+
+		query.IdxPattern = ipb.String()
+
+	}
 
 	path := fmt.Sprintf("%s-data-%s%s/_search", account, query.Model, query.IdxPattern)
 
@@ -140,17 +221,20 @@ func (a *Api) ExecuteQueryHandler(c *gin.Context) {
 		return
 	}
 
-	qObj := &es.Obj{}
+	// only attempt if there is no template
+	if queryResult.Source.QueryTemplate == "" {
+		qObj := &es.Obj{}
 
-	err = json.Unmarshal([]byte(queryResult.Source.QueryJson), qObj)
-	if err != nil {
-		ak.GinErrorAbort(500, "QueryUnmarshalError", err.Error())
-		return
+		err = json.Unmarshal([]byte(queryResult.Source.QueryJson), qObj)
+		if err != nil {
+			ak.GinErrorAbort(500, "QueryUnmarshalError", err.Error())
+			return
+		}
+
+		queryResult.Source.Query = qObj
 	}
 
-	queryResult.Source.Query = qObj
-
-	code, queryExecuteResult, err := a.ExecuteQuery(account, queryResult.Source)
+	code, queryExecuteResult, err := a.ExecuteQuery(account, queryResult.Source, c)
 	if err != nil {
 		a.Logger.Error("EsError", zap.Error(err))
 		ak.SetPayloadType("EsError")
@@ -191,15 +275,17 @@ func (a *Api) UpsertQueryHandler(c *gin.Context) {
 		return
 	}
 
-	// convert query to json
-	queryJson, err := json.Marshal(query.Query)
-	if err != nil {
-		ak.GinErrorAbort(500, "QueryUnmashalError", err.Error())
-		return
-	}
+	if query.Query != nil {
+		// convert query to json
+		queryJson, err := json.Marshal(query.Query)
+		if err != nil {
+			ak.GinErrorAbort(500, "QueryUnmashalError", err.Error())
+			return
+		}
 
-	query.QueryJson = string(queryJson)
-	query.Query = nil
+		query.QueryJson = string(queryJson)
+		query.Query = nil
+	}
 
 	// ensure lowercase machine name
 	query.MachineName = strings.ToLower(query.MachineName)
@@ -319,8 +405,15 @@ type Query struct {
 	// query object
 	Query *es.Obj `json:"query,omitempty" mapstructure:"query"`
 
+	// used to describe input parameters
+	Parameters []tm.Model `json:"parameters,omitempty" mapstructure:"parameters"`
+
 	// query json
 	QueryJson string `json:"query_json,omitempty" mapstructure:"query_json"`
+
+	// if a query template is present it will take the place of
+	// the query and query_json fields
+	QueryTemplate string `json:"query_template,omitempty" mapstructure:"query_template"`
 
 	// describes the query output
 	ResultFields []tm.Model `json:"fields" mapstructure:"fields"`
@@ -358,6 +451,12 @@ func GetQueryTemplateMapping() es.IndexTemplate {
 		},
 		"query_json": es.Obj{
 			"type": "text",
+		},
+		"query_template": es.Obj{
+			"type": "text",
+		},
+		"parameters": es.Obj{
+			"type": "nested",
 		},
 		"result_fields": es.Obj{
 			"type": "nested",

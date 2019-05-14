@@ -100,7 +100,7 @@ services:
   # the properties of the rxtx payload.
   # see https://github.com/txn2/tm
   tm:
-    image: txn2/tm:v0.1.1
+    image: txn2/tm:v0.2.0
     container_name: tm
     restart: unless-stopped
     environment:

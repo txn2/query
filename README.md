@@ -221,6 +221,36 @@ curl -X GET \
   -H 'Authorization: Basic dGVzdDpQRFdnWXIzYlFHTm9McHRCUkRrTFRHUWNSbUNNcUxHUkZwWG9YSjh4TVBzTUxNZzNMSHZXcEpnRHUydjNMWUJB'
 ```
 
+## Query Templates
+
+Query templates use [Go's build in template](https://golang.org/pkg/text/template/) system along with [Sprig](http://masterminds.github.io/sprig/). The following example tests a query with `/run` and
+demonstrates a query string override of default values provided in the `"parameters"` section:
+
+```bash
+curl -X POST \
+  'http://localhost:8080/run/test?size=0&idx=2019.%2A' \
+  -H 'Authorization: Basic dGVzdDpQRFdnWXIzYlFHTm9McHRCUkRrTFRHUWNSbUNNcUxHUkZwWG9YSjh4TVBzTUxNZzNMSHZXcEpnRHUydjNMWUJB' \
+  -d '{
+    "machine_name": "get_some_metrics",
+    "display_name": "Get records from the some_metrics index.",
+    "description": "Get some_metrics",
+    "model": "some_metrics",
+    "idx_pattern": "-ts-{{ index . \"idx\" }}",
+    "query_template": "{\"size\": {{ index . \"size\" }},\"query\": {\"match_all\": {}}}",
+	"parameters": [
+		{
+			"machine_name": "size",
+			"default_value": "1"
+		},
+		{
+			"machine_name": "idx",
+			"default_value": "2019.*"
+		}
+	]
+}'
+```
+
+
 [Token]: https://github.com/txn2/token
 [txn2/provision]: https://github.com/txn2/provision
 [txn2/tm]: https://github.com/txn2/tm
