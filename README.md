@@ -14,9 +14,11 @@
 Configuration is inherited from [txn2/micro](https://github.com/txn2/micro#configuration). The
 following configuration is specific to **query**:
 
-| Flag          | Environment Variable | Description                                                |
-|:--------------|:---------------------|:-----------------------------------------------------------|
-| -esServer     | ELASTIC_SERVER       | Elasticsearch Server (default "http://elasticsearch:9200") |
+| Flag             | Environment Variable | Description                                                |
+|:-----------------|:---------------------|:-----------------------------------------------------------|
+| -esServer        | ELASTIC_SERVER       | Elasticsearch Server (default "http://elasticsearch:9200") |
+| -provisionServer | PROVISION_SERVER     | Provision Server ([txn2/provision])                        |
+| -authCache       | AUTH_CACHE           | Seconds to cache key (BasicAuth) authentication.           |
 
 ## Routes
 
