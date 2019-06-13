@@ -10,6 +10,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/Masterminds/sprig"
 	"github.com/gin-gonic/gin"
 	"github.com/txn2/ack"
@@ -217,6 +219,9 @@ func (a *Api) ExecuteQueryHandlerF(system bool) gin.HandlerFunc {
 			a.Logger.Error("EsError", zap.Error(err))
 			ak.SetPayloadType("EsError")
 			ak.SetPayload("Error communicating with database.")
+			//if queryResult != nil {
+			//	ak.SetPayload("Error communicating with database.")
+			//}
 			ak.GinErrorAbort(500, "EsError", err.Error())
 			return
 		}
@@ -352,8 +357,13 @@ func (a *Api) GetQuery(account string, id string) (int, *Result, error) {
 
 	code, ret, err := a.Elastic.Get(fmt.Sprintf(locFmt, account, IdxQuery, id))
 	if err != nil {
-		a.Logger.Error("EsError", zap.Error(err))
+		a.Logger.Error("EsGetError", zap.Error(err))
 		return code, nil, err
+	}
+
+	if code != 200 {
+		a.Logger.Error("EsGetNon200", zap.ByteString("returned", ret))
+		return code, nil, errors.New(string(ret))
 	}
 
 	queryResult := &Result{}
