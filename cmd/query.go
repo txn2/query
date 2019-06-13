@@ -1,14 +1,3 @@
-// Copyright 2019 txn2
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//     http://www.apache.org/licenses/LICENSE-2.0
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package main
 
 import (
@@ -31,9 +20,12 @@ import (
 )
 
 var (
+	// protected is intended for public use with BasicAuth and API Keys (use internal to bypass auth)
+	modeEnv            = getEnv("MODE", "protected")
 	elasticServerEnv   = getEnv("ELASTIC_SERVER", "http://elasticsearch:9200")
 	provisionServerEnv = getEnv("PROVISION_SERVER", "http://provision:8070")
 	authCacheEnv       = getEnv("AUTH_CACHE", "60")
+	systemPrefixEnv    = getEnv("SYSTEM_PREFIX", "system_")
 )
 
 func main() {
@@ -43,17 +35,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	mode := flag.String("mode", modeEnv, "Protected or internal modes. (internal = security bypass)")
 	esServer := flag.String("esServer", elasticServerEnv, "Elasticsearch Server")
 	provisionServer := flag.String("provisionServer", provisionServerEnv, "Provision Server (txn2/provision)")
 	authCache := flag.Int("authCache", authCacheInt, "Seconds to cache key (BasicAuth) authentication.")
+	systemPrefix := flag.String("systemPrefix", systemPrefixEnv, "Prefix for system indices.")
 
 	serverCfg, _ := micro.NewServerCfg("Query")
 	server := micro.NewServer(serverCfg)
 
 	qApi, err := query.NewApi(&query.Config{
-		Logger:        server.Logger,
-		HttpClient:    server.Client,
-		ElasticServer: *esServer,
+		Logger:          server.Logger,
+		HttpClient:      server.Client,
+		ElasticServer:   *esServer,
+		SystemIdxPrefix: *systemPrefix,
 	})
 	if err != nil {
 		server.Logger.Fatal("failure to instantiate the query API: " + err.Error())
@@ -133,16 +128,28 @@ func main() {
 		}
 	}
 
+	if *mode == "internal" {
+		accessHandler = func(admin bool) gin.HandlerFunc {
+			return func(c *gin.Context) {}
+		}
+	}
+
 	// Run a query (one-off operation for running or testing queries
 	server.Router.POST("run/:account",
 		accessHandler(false),
 		qApi.RunQueryHandler,
 	)
 
-	// Execute a query
+	// Execute a stored query
 	server.Router.GET("exec/:account/:id",
 		accessHandler(false),
-		qApi.ExecuteQueryHandler,
+		qApi.ExecuteQueryHandlerF(false),
+	)
+
+	// Execute a system query for an account
+	server.Router.GET("/system/exec/:account/:id",
+		accessHandler(false),
+		qApi.ExecuteQueryHandlerF(true),
 	)
 
 	// Upsert a query

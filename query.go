@@ -1,14 +1,3 @@
-// Copyright 2019 txn2
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//     http://www.apache.org/licenses/LICENSE-2.0
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 // Package query implements an api for adding and executing Lucene queries
 // associate with an account.
 package query
@@ -22,10 +11,9 @@ import (
 	"time"
 
 	"github.com/Masterminds/sprig"
-
 	"github.com/gin-gonic/gin"
 	"github.com/txn2/ack"
-	"github.com/txn2/es"
+	"github.com/txn2/es/v2"
 	"github.com/txn2/micro"
 	"github.com/txn2/tm"
 	"go.uber.org/zap"
@@ -42,6 +30,9 @@ type Config struct {
 	// if nil, HttpClient will be used.
 	Elastic       *es.Client
 	ElasticServer string
+
+	// for storage and retrieval of system_ queries
+	SystemIdxPrefix string
 }
 
 // Api
@@ -80,7 +71,10 @@ func NewApi(cfg *Config) (*Api, error) {
 	}
 
 	// send template mappings for query index
-	_, _, err := a.Elastic.SendEsMapping(GetQueryTemplateMapping())
+	_, _, errorResponse, err := a.Elastic.SendEsMapping(GetQueryTemplateMapping())
+	if errorResponse != nil {
+
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -103,11 +97,14 @@ func (a *Api) RunQueryHandler(c *gin.Context) {
 		return
 	}
 
-	code, queryExecuteResult, err := a.ExecuteQuery(account, *query, c)
+	code, queryExecuteResult, errorResponse, err := a.ExecuteQuery(account, *query, c)
 	if err != nil {
 		a.Logger.Error("EsError", zap.Error(err))
 		ak.SetPayloadType("EsError")
 		ak.SetPayload("Error communicating with database.")
+		if errorResponse != nil {
+			ak.SetPayload(errorResponse.Message)
+		}
 		ak.GinErrorAbort(500, "EsError", err.Error())
 		return
 	}
@@ -123,7 +120,7 @@ func (a *Api) RunQueryHandler(c *gin.Context) {
 }
 
 // ExecuteQuery
-func (a *Api) ExecuteQuery(account string, query Query, c *gin.Context) (int, *es.Obj, error) {
+func (a *Api) ExecuteQuery(account string, query Query, c *gin.Context) (int, *es.Obj, *es.ErrorResponse, error) {
 	queryResults := &es.Obj{}
 
 	// is there a template to process?
@@ -144,14 +141,14 @@ func (a *Api) ExecuteQuery(account string, query Query, c *gin.Context) (int, *e
 		tmpl, err := template.New("query_template").Funcs(sprig.TxtFuncMap()).Parse(query.QueryTemplate)
 		if err != nil {
 			a.Logger.Error("Error processing query template.", zap.Error(err))
-			return 500, nil, err
+			return 500, nil, nil, err
 		}
 
 		var qb bytes.Buffer
 		err = tmpl.Execute(&qb, params)
 		if err != nil {
 			a.Logger.Error("Error executing query template.", zap.Error(err))
-			return 500, nil, err
+			return 500, nil, nil, err
 		}
 
 		query.QueryJson = qb.String()
@@ -162,7 +159,7 @@ func (a *Api) ExecuteQuery(account string, query Query, c *gin.Context) (int, *e
 		err = json.Unmarshal(qb.Bytes(), query.Query)
 		if err != nil {
 			a.Logger.Error("Error Marshaling query json into object.", zap.Error(err))
-			return 500, nil, err
+			return 500, nil, nil, err
 		}
 
 		// process index pattern as template
@@ -171,14 +168,14 @@ func (a *Api) ExecuteQuery(account string, query Query, c *gin.Context) (int, *e
 		tmpl, err = template.New("idx_pattern").Funcs(sprig.TxtFuncMap()).Parse(query.IdxPattern)
 		if err != nil {
 			a.Logger.Error("Error processing idx_pattern template.", zap.Error(err))
-			return 500, nil, err
+			return 500, nil, nil, err
 		}
 
 		var ipb bytes.Buffer
 		err = tmpl.Execute(&ipb, params)
 		if err != nil {
 			a.Logger.Error("Error executing idx_pattern template.", zap.Error(err))
-			return 500, nil, err
+			return 500, nil, nil, err
 		}
 
 		query.IdxPattern = ipb.String()
@@ -187,77 +184,98 @@ func (a *Api) ExecuteQuery(account string, query Query, c *gin.Context) (int, *e
 
 	path := fmt.Sprintf("%s-data-%s%s/_search", account, query.Model, query.IdxPattern)
 
-	code, err := a.Elastic.PostObjUnmarshal(path, query.Query, queryResults)
+	code, errorResponse, err := a.Elastic.PostObjUnmarshal(path, query.Query, queryResults)
 	if err != nil {
 		a.Logger.Error("EsError", zap.Error(err))
-		return code, nil, err
+		return code, nil, errorResponse, err
 	}
 
 	a.Logger.Info("Search", zap.Int("code", code), zap.String("path", path))
 
-	return code, queryResults, nil
+	return code, queryResults, errorResponse, nil
 }
 
 // ExecuteQueryHandler
-func (a *Api) ExecuteQueryHandler(c *gin.Context) {
-	ak := ack.Gin(c)
+func (a *Api) ExecuteQueryHandlerF(system bool) gin.HandlerFunc {
 
-	// ExecuteQueryHandler must be security screened in
-	// upstream middleware to protect account access.
-	account := c.Param("account")
-	id := c.Param("id")
-	code, queryResult, err := a.GetQuery(account, id)
-	if err != nil {
-		a.Logger.Error("EsError", zap.Error(err))
-		ak.SetPayloadType("EsError")
-		ak.SetPayload("Error communicating with database.")
-		ak.GinErrorAbort(500, "EsError", err.Error())
-		return
-	}
+	return func(c *gin.Context) {
+		ak := ack.Gin(c)
 
-	if code >= 400 && code < 500 {
-		ak.SetPayload("Query " + id + " not found.")
-		ak.GinErrorAbort(404, "QueryNotFound", "Query not found")
-		return
-	}
+		// ExecuteQueryHandler must be security screened in
+		// upstream middleware to protect account access.
+		account := c.Param("account")
 
-	// only attempt if there is no template
-	if queryResult.Source.QueryTemplate == "" {
-		qObj := &es.Obj{}
+		queryLocation := account
 
-		err = json.Unmarshal([]byte(queryResult.Source.QueryJson), qObj)
+		if system {
+			queryLocation = a.SystemIdxPrefix
+		}
+
+		id := c.Param("id")
+		code, queryResult, err := a.GetQuery(queryLocation, id)
 		if err != nil {
-			ak.GinErrorAbort(500, "QueryUnmarshalError", err.Error())
+			a.Logger.Error("EsError", zap.Error(err))
+			ak.SetPayloadType("EsError")
+			ak.SetPayload("Error communicating with database.")
+			ak.GinErrorAbort(500, "EsError", err.Error())
 			return
 		}
 
-		queryResult.Source.Query = qObj
-	}
+		if code >= 400 && code < 500 {
+			ak.SetPayload("Query " + id + " not found.")
+			ak.GinErrorAbort(404, "QueryNotFound", "Query not found")
+			return
+		}
 
-	code, queryExecuteResult, err := a.ExecuteQuery(account, queryResult.Source, c)
-	if err != nil {
-		a.Logger.Error("EsError", zap.Error(err))
-		ak.SetPayloadType("EsError")
-		ak.SetPayload("Error communicating with database.")
-		ak.GinErrorAbort(500, "EsError", err.Error())
-		return
-	}
+		// only attempt if there is no template
+		if queryResult.Source.QueryTemplate == "" {
+			qObj := &es.Obj{}
 
-	if code >= 400 && code < 500 {
-		ak.SetPayload("Query execution failed")
-		ak.GinErrorAbort(404, "QueryFailure", "Index not found")
-		return
-	}
+			err = json.Unmarshal([]byte(queryResult.Source.QueryJson), qObj)
+			if err != nil {
+				ak.GinErrorAbort(500, "QueryUnmarshalError", err.Error())
+				return
+			}
 
-	ak.SetPayloadType("EsResult")
-	ak.GinSend(queryExecuteResult)
+			queryResult.Source.Query = qObj
+		}
+
+		code, queryExecuteResult, errorResponse, err := a.ExecuteQuery(account, queryResult.Source, c)
+		if err != nil {
+			a.Logger.Error("EsError", zap.Error(err))
+			ak.SetPayloadType("EsError")
+			ak.SetPayload("Error communicating with database.")
+			if errorResponse != nil {
+				ak.SetPayload(errorResponse.Message)
+			}
+			ak.GinErrorAbort(500, "EsError", err.Error())
+			return
+		}
+
+		if code >= 400 && code < 500 {
+			ak.SetPayload("Query execution failed")
+			ak.GinErrorAbort(404, "QueryFailure", "Index not found")
+			return
+		}
+
+		ak.SetPayloadType("EsResult")
+		ak.GinSend(queryExecuteResult)
+	}
 }
 
 // UpsertQuery
-func (a *Api) UpsertQuery(account string, query *Query) (int, es.Result, error) {
+func (a *Api) UpsertQuery(account string, query *Query) (int, es.Result, *es.ErrorResponse, error) {
 	a.Logger.Info("Upsert query record", zap.String("account", account), zap.String("machine_name", query.MachineName))
 
-	return a.Elastic.PutObj(fmt.Sprintf("%s-%s/_doc/%s", account, IdxQuery, query.MachineName), query)
+	locFmt := "%s-%s/_doc/%s"
+
+	// CONVENTION: if the account ends in an underscore "_" then
+	// it is a system model (SYSTEM_IdxModel)
+	if strings.HasSuffix(account, "_") {
+		locFmt = "%s%s/_doc/%s"
+	}
+
+	return a.Elastic.PutObj(fmt.Sprintf(locFmt, account, IdxQuery, query.MachineName), query)
 }
 
 // UpsertQueryHandler
@@ -290,11 +308,14 @@ func (a *Api) UpsertQueryHandler(c *gin.Context) {
 	// ensure lowercase machine name
 	query.MachineName = strings.ToLower(query.MachineName)
 
-	code, esResult, err := a.UpsertQuery(account, query)
+	code, esResult, errorResponse, err := a.UpsertQuery(account, query)
 	if err != nil {
 		a.Logger.Error("Upsert failure.", zap.Error(err))
 		ak.SetPayloadType("ErrorMessage")
 		ak.SetPayload("there was a problem upserting the query")
+		if errorResponse != nil {
+			ak.SetPayload(errorResponse.Message)
+		}
 		ak.GinErrorAbort(500, "UpsertError", err.Error())
 		return
 	}
@@ -321,7 +342,15 @@ type Result struct {
 // GetModel
 func (a *Api) GetQuery(account string, id string) (int, *Result, error) {
 
-	code, ret, err := a.Elastic.Get(fmt.Sprintf("%s-%s/_doc/%s", account, IdxQuery, id))
+	locFmt := "%s-%s/_doc/%s"
+
+	// CONVENTION: if the account ends in an underscore "_" then
+	// it is a system model (SYSTEM_IdxModel)
+	if strings.HasSuffix(account, "_") {
+		locFmt = "%s%s/_doc/%s"
+	}
+
+	code, ret, err := a.Elastic.Get(fmt.Sprintf(locFmt, account, IdxQuery, id))
 	if err != nil {
 		a.Logger.Error("EsError", zap.Error(err))
 		return code, nil, err
@@ -421,7 +450,7 @@ type Query struct {
 
 // GetModelsTemplateMapping
 func GetQueryTemplateMapping() es.IndexTemplate {
-	properties := es.Obj{
+	var properties = es.Obj{
 		"machine_name": es.Obj{
 			"type": "text",
 		},
@@ -462,12 +491,11 @@ func GetQueryTemplateMapping() es.IndexTemplate {
 			"type": "nested",
 		},
 	}
-
-	template := es.Obj{
-		"index_patterns": []string{"*-" + IdxQuery},
+	var tmpl = es.Obj{
+		"index_patterns": []string{"*-" + IdxQuery, "*_" + IdxQuery},
 		"settings": es.Obj{
 			"index": es.Obj{
-				"number_of_shards": 2,
+				"number_of_shards": 1,
 			},
 		},
 		"mappings": es.Obj{
@@ -479,9 +507,8 @@ func GetQueryTemplateMapping() es.IndexTemplate {
 			},
 		},
 	}
-
 	return es.IndexTemplate{
 		Name:     IdxQuery,
-		Template: template,
+		Template: tmpl,
 	}
 }

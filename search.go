@@ -1,14 +1,3 @@
-// Copyright 2019 txn2
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//     http://www.apache.org/licenses/LICENSE-2.0
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package query
 
 import (
@@ -16,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/txn2/ack"
-	"github.com/txn2/es"
+	"github.com/txn2/es/v2"
 	"go.uber.org/zap"
 )
 
@@ -37,16 +26,19 @@ type SearchResultsAck struct {
 }
 
 // SearchQueries
-func (a *Api) SearchQueries(account string, searchObj *es.Obj) (int, SearchResults, error) {
+func (a *Api) SearchQueries(account string, searchObj *es.Obj) (int, SearchResults, *es.ErrorResponse, error) {
 	queryResults := &SearchResults{}
 
-	code, err := a.Elastic.PostObjUnmarshal(fmt.Sprintf("%s-%s/_search", account, IdxQuery), searchObj, queryResults)
+	code, errorResponse, err := a.Elastic.PostObjUnmarshal(fmt.Sprintf("%s-%s/_search", account, IdxQuery), searchObj, queryResults)
+	if errorResponse != nil {
+		a.Logger.Error("EsErrorResponse", zap.String("es_error_response", errorResponse.Message))
+	}
 	if err != nil {
 		a.Logger.Error("EsError", zap.Error(err))
-		return code, *queryResults, err
+		return code, *queryResults, errorResponse, err
 	}
 
-	return code, *queryResults, nil
+	return code, *queryResults, nil, nil
 }
 
 // SearchQueryHandler
@@ -64,11 +56,13 @@ func (a *Api) SearchQueryHandler(c *gin.Context) {
 	// upstream middleware to protect account access.
 	account := c.Param("account")
 
-	code, esResult, err := a.SearchQueries(account, obj)
+	code, esResult, errorResponse, err := a.SearchQueries(account, obj)
 	if err != nil {
-		a.Logger.Error("EsError", zap.Error(err))
 		ak.SetPayloadType("EsError")
 		ak.SetPayload("Error communicating with database.")
+		if errorResponse != nil {
+			ak.SetPayload(errorResponse.Message)
+		}
 		ak.GinErrorAbort(500, "EsError", err.Error())
 		return
 	}
