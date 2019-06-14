@@ -22,13 +22,14 @@ following configuration is specific to **query**:
 
 ## Routes
 
-| Method | Route Pattern                          | Description                                                    |
-|:-------|:---------------------------------------|:---------------------------------------------------------------|
-| POST   | [run/:account](#run-a-query)           | Run a query to test it. This action does not save the query.   |
-| GET    | [exec/:account/:id](#execute-a-query)  | Executes a saved query.                                        |
-| POST   | [upsert/:account](#upsert-a-query)     | Upsert (save) a query.                                         |
-| GET    | [get/:account/:id](#get-a-query)       | Get a saved query.                                             |
-| POST   | [search/:account](#search-for-queries) | Search for saved queries.                                      |
+| Method | Route Pattern                                | Description                                                  |
+|:-------|:---------------------------------------------|:-------------------------------------------------------------|
+| POST   | [run/:account](#run-a-query)                 | Run a query to test it. This action does not save the query. |
+| GET    | [exec/:account/:id](#execute-a-query)        | Executes a saved query.                                      |
+| GET    | [system/exec/:account/:id](#execute-a-query) | Executes a saved system query.                               |
+| POST   | [upsert/:account](#upsert-a-query)           | Upsert (save) a query.                                       |
+| GET    | [get/:account/:id](#get-a-query)             | Get a saved query.                                           |
+| POST   | [search/:account](#search-for-queries)       | Search for saved queries.                                    |
 
 
 ## Local Development
